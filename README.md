@@ -12,19 +12,19 @@ However, Brazil faces huge issues such as high corruption, dissatisfaction with 
 
 This project is structured in four parts:
 
-###### **1. Brazil’s importance for the global climate**
+#### **1. Brazil’s importance for the global climate**
 
 * We want to highlight and further improve our audience’s understanding of Brazil’s importance for the global climate.
 
-###### **2: Brazil’s election in 2018 and the ensuing policies Jair Bolsonaro established** 
+#### **2: Brazil’s election in 2018 and the ensuing policies Jair Bolsonaro established** 
 
 * We intend to show Bolsonaro’s support on a map using a geospatial analysis.
 
-###### **3: Impact of Bolsonaro’s policies on Brazil’s efforts against climate change**
+#### **3: Impact of Bolsonaro’s policies on Brazil’s efforts against climate change**
 
 * Analysis of deforestation in the Amazon rain forest over time.
 
-###### **4: Brazil’s 2022 Presidential elections and a potential turnaround**
+#### **4: Brazil’s 2022 Presidential elections and a potential turnaround**
 
 * We intend to show Lula’s support on a map using a geospatial analysis.
 
