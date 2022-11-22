@@ -1,0 +1,523 @@
+---
+title: "AM10_Group_Project_v01"
+date: "2022-11-17"
+output: 
+  html_document:
+    theme: flatly
+    highlight: zenburn
+    number_sections: false
+    toc: yes
+    toc_float: yes
+    code_folding: hide
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, install libraries, include = FALSE, warning=FALSE, message=FALSE}
+library(tidyverse)
+library(extrafont)
+library(vroom)
+library(ggrepel)
+library(patchwork)
+library(skimr)
+library(lubridate)
+library(readxl)
+library(RColorBrewer)
+library(sf)
+library(here)
+library(tmap)
+library(tidyverse)
+library(lubridate)
+library(ggmap)
+library(ggrepel)
+library(gridExtra)
+library(pander)
+library(here)
+library(janitor)
+library(skimr)
+library(leaflet)
+library(tmap)
+library(tmaptools)
+library(hrbrthemes)
+library(mapview)
+library(viridis)
+library(ggtext)
+library(readr)
+library(ggThemeAssist)
+library(rnaturalearth)
+library(rnaturalearthdata)
+```
+
+# Page 1: Forests in Brazil
+
+```{r, Forests in Brazil, warning=FALSE}
+forest <- read_csv(here("Final_Group/share-global-forest.csv"))
+
+forest_area <- forest %>%
+  filter(Year == 2020) %>%
+  drop_na(Code) %>%
+  rename(share = `Share of global forest area`)
+
+map <- ne_countries(scale = "medium", returnclass = "sf") %>%
+  dplyr::select(name, iso_a3, geometry) %>%
+  filter(!name %in% c("Greenland", "Antarctica"))%>%
+  rename(Code = iso_a3)
+
+forest_df <- left_join(map, forest_area, by = "Code")
+
+base_map <- ggplot(data = forest_df) +
+  geom_sf(
+    mapping = aes(
+      geometry = geometry,
+      fill = share),
+    colour = "black",      # white borders between regions
+  )+
+  scale_fill_gradient(
+    low = "#e5e4bb",
+    high = '#014300',
+    na.value = "grey80",
+  )+
+  coord_sf(crs = "+proj=robin") + 
+  labs(title = "Brazil's massive forest is one of the most dense in the world",
+       color = "Share (%)") +
+  theme_bw() +
+  labs(fill = "Share (%)") +
+  theme(plot.background = element_rect(color = "white"),
+        axis.text.x = element_blank(),
+        text = element_text(size = 10, color = "black"),
+        plot.title = element_text(size = 10, face = "bold"),
+        axis.text = element_text(color = "black"),
+        axis.ticks = element_blank(),
+        legend.title = element_text(size = 8))+
+  NULL
+```
+
+```{r,creat forest map,echo=TRUE, message=FALSE, warning=FALSE}
+area <- read_csv(here("Final_Group/area.csv"))
+forest_km <- read_csv(here("Final_Group/forest-area-km.csv"))
+
+forest_new <- left_join(forest_km, area, by = "Code") %>%
+  drop_na(Code)
+
+forest_df_new <- left_join(map, forest_new, by = "Code") %>%
+  filter(Year == 2020)%>%
+  mutate(forest_density = `Forest area`/country_area)
+
+new_map <- ggplot(data = forest_df_new) +
+  geom_sf(
+    mapping = aes(
+      geometry = geometry,
+      fill = forest_density),
+    colour = "black",      # white borders between regions
+  )+
+  scale_fill_gradient(
+    low = "#e5e4bb",
+    high = '#014300',
+    na.value = "grey80",
+  )+
+  coord_sf(crs = "+proj=robin") + 
+  theme_bw() +
+  labs(fill = "Density (%)") +
+  theme(plot.background = element_rect(color = "white"),
+        axis.text.x = element_blank(),
+        text = element_text(size = 8, color = "black"),
+        plot.title = element_text(size = 15),
+        axis.text = element_text(color = "black"),
+        axis.ticks = element_blank(),
+        legend.title = element_text(size = 8)) +
+  NULL
+
+base_map / new_map & theme(legend.justification = "left")
+```
+
+
+# Page 2: Dilemma
+
+```{r, page2, warning=FALSE, message=FALSE}
+# Import datda
+deforestation_world_bank <- read_csv(here("Final_Group/API_AG.LND.FRST.ZS_DS2_en_csv_.csv"), skip=3)
+
+# Prepare data
+deforestation_world_bank2 <- deforestation_world_bank %>% 
+  janitor::clean_names() %>% 
+  # exclude empty columns
+  select(-(x1960:x1989), -x67) %>% 
+  filter(country_name == "Brazil") %>% 
+  pivot_longer(cols = x1990:x2021, 
+               names_to = "year", 
+               values_to = "forest_area_perc") %>% 
+  mutate(year = as.numeric(substring(year, 2))) %>% 
+  filter(year != "2021")
+
+# Prepare data
+deforestation_world_bank3 <- deforestation_world_bank %>% 
+  janitor::clean_names() %>% 
+  # Deselect empty columns
+  select(-(x1960:x1989), -x67, -x2021) %>% 
+  # Only look at 3 countries
+  filter(country_name %in% c("Brazil", "European Union", "World")) %>% 
+  pivot_longer(cols = x1990:x2020, 
+               names_to = "year", 
+               values_to = "forest_area_perc") %>% 
+  mutate(year = as.numeric(substring(year, 2)), 
+         forest_area_perc = forest_area_perc / 100) 
+
+label_plot2 <- "Decrease of 11%P over 30 years \nThe deforested area is equal to 60% of the \nentire forest area of the European Union!"
+
+# Plot the chart
+ggplot(deforestation_world_bank3, aes(x = year, y = forest_area_perc, group = country_name, colour = country_name)) + 
+  geom_line(size = 1) + 
+  theme_bw() + 
+  expand_limits(y = 0, x = 2022) + 
+  theme(legend.position = "none") + 
+  scale_color_manual(values = c("#011D62", "grey70", "peru")) + 
+  # Add arrow
+  geom_segment(aes(x = 2020, xend = 2020, y = 0.50, yend = 0.5942), 
+               colour = "#C90F3E", 
+               size = 0.3, 
+               arrow = arrow(length = unit(2, "mm"), type = "closed")) +
+  geom_segment(aes(x = 1990, xend = 2020, y = 0.50, yend = 0.50), 
+               colour = "#C90F3E", 
+               size = 0.3) +
+  geom_segment(aes(x = 1990, xend = 1990, y = 0.7046, yend = 0.50), 
+               colour = "#C90F3E", 
+               size = 0.31) +
+  # Add annotation to arrow
+  geom_label(
+    aes(x = 2005, y = 0.50, label = label_plot2),
+    colour = "#C90F3E",
+    hjust = 0.5,
+    lineheight = .8,
+    inherit.aes = FALSE, 
+    size = 4) + 
+  # Add country labels
+  geom_label(
+    aes(x = 2021.75, y = 0.5942, label = "Brazil"),
+    colour = "#011D62",
+    hjust = 0.5,
+    lineheight = .8,
+    inherit.aes = FALSE,
+    ) +
+  geom_label(
+    aes(x = 2021.5, y = 0.3984, label = "E.U."),
+    colour = "grey50",
+    hjust = 0.5,
+    lineheight = .8,
+    inherit.aes = FALSE
+    ) +
+  geom_label(
+    aes(x = 2017.75, y = 0.3072, label = "World"),
+    colour = "peru",
+    hjust = 0.5,
+    lineheight = .8,
+    inherit.aes = FALSE
+    ) + 
+  labs(title = "<b>Forest area in Brazil decreased dramatically over past 30 years</b><br>
+                <span style = 'font-size:12pt'>Graph shows forest area relative to total area over time in <b><span style='color:#011D62'>Brazil</span></b>, <br><b><span style='color:grey50'>the European Union</span></b>, and <b><span style='color:peru'>around the world</span></b>", 
+       x = NULL, 
+       y = NULL, 
+       caption = "Source: World Bank, Eurostat. Values for World missing after 2016") +
+  theme(plot.title = element_markdown()) +
+  scale_y_continuous(labels = scales::percent) +
+  coord_fixed(ratio=15)
+```
+
+
+```{r, stacked area, warning=FALSE, message=FALSE}
+
+drivers_forest_loss <- read_csv(here("Final_Group/drivers-forest-loss-brazil-amazon.csv"))
+
+# Prepare data
+drivers_forest_loss2 <- drivers_forest_loss %>% 
+  janitor::clean_names() %>% 
+  # Drop empty columns
+  drop_na() %>% 
+  # Only look at data columns
+  select(flooding_due_to_dams:commercial_crops) %>% 
+  # Calculate sum of each row
+  summarize(flooding_due_to_dams = sum(flooding_due_to_dams), 
+            natural_disturbances = sum(natural_disturbances), 
+            fire = sum(fire), 
+            selective_logging = sum(selective_logging), 
+            other_infrastructure = sum(other_infrastructure), 
+            roads = sum(roads), 
+            mining = sum(mining), 
+            small_scale_clearing = sum(small_scale_clearing), 
+            tree_plantations_including_palm = sum(tree_plantations_including_palm), 
+            pasture = sum(pasture), 
+            commercial_crops = sum(commercial_crops)) %>% 
+  pivot_longer(cols = flooding_due_to_dams:commercial_crops, 
+               names_to = "kind", 
+               values_to = "sum") %>% 
+  arrange(desc(sum)) %>% 
+  slice_head(n = 5) %>% 
+  mutate(sum = sum/1e6)
+
+# Plot the graph
+ggplot(drivers_forest_loss2, aes(x = sum, y = fct_reorder(kind, sum))) + 
+  geom_point(size = 3, colour = "#C90F3E") + 
+  theme_bw() + 
+  # Add nice looking labels to y axis
+  scale_y_discrete(labels = c("Selective logging", "Fire", "Commercial crops", "Small-scale clearing", "Grazing land")) + 
+  # Add title with html code
+  labs(title = "<b>Grazing land is the main driver of forest loss in Brazil</b><br>
+                <span style = 'font-size:12pt'>Graph shows total deforested area by subsequent usage of land from 2001-2013", 
+       x = "Deforested area [in Mio. ha.]", 
+       y = NULL, 
+       caption = "Source: Ourworldindata.org") + 
+  # Enable ggplot to run html in title part
+  theme(plot.title = element_markdown()) +
+  # Change proportional size of picture to fit presentation
+  coord_fixed(ratio=1.5)
+```
+
+# Page 3: Lula
+
+```{r, page3, warning=FALSE, message=FALSE}
+lula_impact_terra_brasilis <- read_delim(here("Final_Group/terrabrasilis_legal_amazon.csv"), 
+    delim = ";", escape_double = FALSE, trim_ws = TRUE)
+
+glimpse(lula_impact_terra_brasilis)
+lula_impact_terra_brasilis <- lula_impact_terra_brasilis %>% 
+  janitor::clean_names() %>% 
+  filter(year >=2000 & year <= 2017) %>% 
+  mutate(year = as.numeric(year), 
+         lula_president = ifelse(year >=2003 & year <= 2010, TRUE, FALSE), 
+         area_km2 = area_km2/1000) 
+
+ggplot(lula_impact_terra_brasilis, aes(x = year, y = area_km2, fill = lula_president)) + 
+  expand_limits(y = 35) + 
+  geom_rect(aes(xmin=2002.5, xmax=2010.5, ymin=-Inf, ymax=Inf), fill = "grey90", colour = "grey90", alpha = 0.5) + 
+  geom_hline(yintercept = seq(0, 30, by=5), size = 0.2, colour = "grey70") +
+  geom_vline(xintercept = seq(2000, 2017, by=2), size = 0.2, colour = "grey70") +
+  geom_col() + 
+  theme_minimal() + 
+  theme(legend.position = "none") + 
+  geom_text(aes(x = 2006.5, y = 35, label = "Lula's first presidency"),
+    colour = "black",
+    hjust = 0.5,
+    lineheight = .8,
+    inherit.aes = FALSE, 
+    size = 4, 
+    check_overlap = TRUE) + 
+  scale_fill_manual(values = c("#011D62", "#C90F3E")) + 
+  geom_segment(aes(x = 2010, xend = 2010, y = 30, yend = 7), 
+               colour = "#C90F3E", 
+               size = 0.5, 
+               arrow = arrow(length = unit(2, "mm"), type = "closed")) +
+  geom_segment(aes(x = 2003, xend = 2010, y = 30, yend = 30), 
+               colour = "#C90F3E", 
+               size = 0.5) +
+  geom_segment(aes(x = 2003, xend = 2003, y = 25.396, yend = 30), 
+               colour = "#C90F3E", 
+               size = 0.5) + 
+  geom_label(
+    aes(x = 2006.5, y = 30, label = "-72%"),
+    colour = "#C90F3E",
+    hjust = 0.5,
+    lineheight = .8,
+    inherit.aes = FALSE, 
+    size = 5)  + theme(panel.grid.major = element_line(linetype = "blank"),
+    panel.grid.minor = element_line(linetype = "blank")) + 
+  labs(title = "<b>Lula drastically decreased deforestation during his presidency</b><br>
+                <span style = 'font-size:12pt'>Graph shows deforested area per year [in 1,000 sq. km] in Brazil over time</span>", 
+       x = NULL, 
+       y = NULL, 
+       caption = "Source: Brazilian National Institute for Space Research INPE & terrabrasilis") + 
+  theme(plot.title = element_markdown()) +
+  coord_fixed(ratio=0.32)
+```
+
+# Page 4: Bolsonaro
+
+```{r, page4, warning=FALSE, message=FALSE}
+bolsonaro_impact_terra_brasilis <- read_delim(here("Final_Group/terrabrasilis_amazon_18_10_2022_1668778913302.csv"), 
+    delim = ";", escape_double = FALSE, trim_ws = TRUE)
+
+bolsonaro_impact_terra_brasilis <- bolsonaro_impact_terra_brasilis %>% 
+  janitor::clean_names() %>% 
+  mutate(year = as.numeric(year), 
+         area_km2 = area_km2 / 1000, 
+         bolsonaro_president = ifelse(year >=2019, TRUE, FALSE)) %>% 
+  filter(year >=2010)
+
+ggplot(bolsonaro_impact_terra_brasilis, aes(x = year, y = area_km2, fill = bolsonaro_president)) + 
+  expand_limits(y = 16) + 
+  geom_rect(aes(xmin=2018.5, xmax=2021.5, ymin=-Inf, ymax=Inf), fill = "grey90", colour = "grey90", alpha = 0.5) + 
+  geom_hline(yintercept = seq(0, 15, by=2.5), size = 0.2, colour = "grey70") +
+  geom_vline(xintercept = seq(2010, 2021, by=2), size = 0.2, colour = "grey70") +
+  geom_col() + 
+  theme_minimal() + 
+  theme(legend.position = "none") + 
+  geom_text(aes(x = 2020, y = 16.5, label = "Bolsonaro's \npresidency"),
+    colour = "black",
+    hjust = 0.5,
+    lineheight = .8,
+    inherit.aes = FALSE, 
+    size = 4, 
+    check_overlap = TRUE) + 
+  scale_fill_manual(values = c("#011D62", "#C90F3E")) + 
+  geom_segment(aes(x = 2021, xend = 2021, y = 13.75, yend = 12.19), 
+               colour = "#C90F3E", 
+               size = 0.5, 
+               arrow = arrow(length = unit(2, "mm"), type = "closed")) +
+  geom_segment(aes(x = 2018, xend = 2021, y = 13.75, yend = 13.75), 
+               colour = "#C90F3E", 
+               size = 0.5) +
+  geom_segment(aes(x = 2018, xend = 2018, y = 6.945, yend = 13.75), 
+               colour = "#C90F3E", 
+               size = 0.5) + 
+  geom_label(
+    aes(x = 2019.5, y = 13.75, label = "+76%"),
+    colour = "#C90F3E",
+    hjust = 0.5,
+    lineheight = .8,
+    inherit.aes = FALSE, 
+    size = 5)  + theme(panel.grid.major = element_line(linetype = "blank"),
+    panel.grid.minor = element_line(linetype = "blank")) + 
+  labs(title = "<b>Deforestation shot up to 10-year highs under Bolsonaro</b><br>
+                <span style = 'font-size:12pt'>Graph shows deforested area per year [in 1,000 sq. km] in Brazil over time</span>", 
+       x = NULL, 
+       y = NULL, 
+       caption = "Source: Brazilian National Institute for Space Research INPE & terrabrasilis \n Minor deviations compared to previous graph due to measurement method differences") + 
+  theme(plot.title = element_markdown()) +
+  coord_fixed(ratio=0.4) + 
+  theme(plot.caption = element_text(hjust = 0))
+```
+
+# Page 5: Regression and election in 2022
+```{r, run regression, warning=FALSE, message=FALSE}
+regression_data_new <- read_excel(here("Final_Group/Regression data set_v04.xls")) %>% 
+  janitor::clean_names() %>% 
+  select(-state)
+glimpse(regression_data_new)
+# Data set combines election results for Bolsonaro from 2018 and 2022 per state 
+# The column election_2022 specifies whether the result comes from 2022 (TRUE) or 2018 (FALSE)
+# One row represents one result
+
+model3 <- lm(bolsonaro_votes ~ poverty + black, regression_data_new)
+summary(model3)
+# Selecting best predictors
+```
+
+```{r, read shape file, echo=TRUE, message=FALSE, warning=FALSE}
+brazil_sf <- read_sf(here("Final_Group/gadm41_BRA_shp/gadm41_BRA_1.shp")) %>%
+  rename(State = NAME_1) %>%
+  mutate(code = as.factor(c(1:27)))
+#glimpse(brazil_sf)
+
+brazil_wgs84 <- brazil_sf %>% 
+  st_transform(4326) # transform CRS to WGS84, latitude/longitude
+
+st_geometry(brazil_wgs84)
+```
+
+Load the voting data.
+```{r,creat the election map in 2018, warning=FALSE, message=FALSE}
+bra_2018 <- read.csv(here("Final_Group/bra_2018.csv"))%>%
+  mutate(code = as.factor(c(1:27)),
+         winner = as.factor(floor(Bolsonaro/50)))
+
+vote_2018_df <- left_join(bra_2018, brazil_sf, by = "code")
+
+vote_map_2018 <- ggplot(data = vote_2018_df) +
+  geom_sf(
+    mapping = aes(
+      geometry = geometry,
+      fill = winner),
+    colour = "white",      # borders between regions
+  )+
+   scale_fill_manual(values = c('#C90F3E', "#011D62"),
+                     labels = c('Haddad (W.P.)', 'Bolsonaro')) +
+  coord_sf(datum = NA) + 
+  theme_minimal() +
+  labs(title = "Western and southern Brazil tends to support Bolsonaro", subtitle = "2018 Election") +
+  theme(text = element_text(size = 8, color = "black"),
+        plot.title = element_text(size = 12, face = "bold"),
+        legend.title = element_text(size = 8)) +
+  guides(fill=guide_legend(title=NULL)) +
+  NULL
+
+#vote_map_2018
+```
+
+
+```{r,creat the election map in 2022, warning=FALSE, message=FALSE}
+bra_2022 <- read.csv(here("Final_Group/bra_2022.csv"))%>%
+  mutate(code = as.factor(c(1:27)),
+         winner = as.factor(floor(Lula/50)))
+
+vote_2022_df <- left_join(bra_2022, brazil_sf, by = "code")
+
+vote_map_2022 <- ggplot(data = vote_2022_df) +
+  geom_sf(
+    mapping = aes(
+      geometry = geometry,
+      fill = winner),
+    colour = "white",      # borders between regions
+  )+
+   scale_fill_manual(values = c('#C90F3E','#011D62'),
+                     breaks = c(1, 0),
+                     labels = c('Lula (W.P.)', 'Bolsonaro')) +
+  coord_sf(datum = NA) + 
+  theme_minimal() +
+  labs(subtitle = "2022 Election") +
+  theme(text = element_text(size = 8, color = "black"),
+        plot.title = element_text(size = 10),
+        legend.title = element_text(size = 8)) +
+  guides(fill=guide_legend(title=NULL)) +
+  NULL
+
+#vote_map_2022
+
+vote_map_2018 + vote_map_2022 & theme(legend.justification = "left")
+```
+
+```{r,creat the poverty and racial map,message=FALSE, warning=FALSE}
+reg_data <- read_excel(here("Final_Group/Regression_data.xls"))%>%
+  mutate(code = as.factor(c(1:27)),
+         poverty_per = Poverty*100)
+
+reg_df <- left_join(reg_data, brazil_sf, by = "code")
+
+poverty_map <- ggplot(data = reg_df) +
+  geom_sf(
+    mapping = aes(
+      geometry = geometry,
+      fill = poverty_per),
+    colour = "white",      # borders between regions
+  )+
+   scale_fill_gradient(
+    low = '#011D62',
+    high = '#C90F3E') +
+  coord_sf(datum = NA) + 
+  labs(title = "Bolsonaro is especially strong in rich, white states") +
+  theme_minimal() +
+  theme(text = element_text(size = 8, color = "black"),
+        plot.title = element_text(size = 10, face = "bold"),
+        legend.title = element_text(size = 8)) +
+  guides(fill=guide_legend(title="Poverty(%)")) +
+  NULL
+
+White_map <- ggplot(data = reg_df) +
+  geom_sf(
+    mapping = aes(
+      geometry = geometry,
+      fill = White),
+    colour = "white",      # borders between regions
+  )+
+   scale_fill_gradient(
+    low = '#C90F3E',
+    high = '#011D62') +
+  coord_sf(datum = NA) + 
+  theme_minimal() +
+  theme(text = element_text(size = 8, color = "black"),
+        plot.title = element_text(size = 10),
+        legend.title = element_text(size = 8)) +
+  guides(fill=guide_legend(title= "White(%)")) +
+  NULL
+
+poverty_map + White_map & theme(legend.justification = "top")
+```
